@@ -26,6 +26,15 @@ from transformers.optimization import get_cosine_schedule_with_warmup
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report, accuracy_score, f1_score, precision_score, recall_score
 
+# custom libraries
+from utils import get_timezone
+from sklearn.metrics import confusion_matrix
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# typing
+from numpy.typing import ArrayLike
+from typing import List
 
 '''
     Define Dataset, Model
@@ -237,6 +246,8 @@ def main(args):
         print("epoch {} train acc {}".format(e+1, train_acc / (batch_id+1)))
         
         model.eval()
+        outs : List = []
+        labels : List = []
 
         # Evalutation
         with torch.no_grad():
@@ -247,6 +258,15 @@ def main(args):
                 label = label.long().to(DEVICE)
                 out = model(token_ids, valid_length, segment_ids)
                 test_acc += calc_accuracy(out, label)
+                
+                ### convert prob to logits for confusion matrix
+                _, max_indices = torch.max(out, 1)
+                outs.extend(max_indices.detach().cpu().numpy())
+                labels.extend(label.detach().cpu().numpy())
+
+            outs = np.array(outs)
+            labels = np.array(labels)
+            calc_confusion_matrix(outs, labels)
 
             print("epoch {} test acc {}".format(e+1, test_acc / (batch_id+1)))
             
@@ -284,10 +304,18 @@ def main(args):
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     dataset_eval.to_csv(os.path.join(OUTPUT_DIR, 'output.csv'), index=False)
     
+if __name__ == "__main__":
+    # arguments로 train_data의 파일을 입력했으면 해당 파일을 사용하도록 설정하고 아니면 train.csv를 사용하도록 설정
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-f", "--file", type=str, default="train.csv")
+    args = parser.parse_args()
+    
+    running_name = f"{args.file[:-4]}-{get_timezone()}"
 
     # Wandb 설정
     wandb.init(project="DataCentric", name = running_name)
 
+    main(args)
 
     # Wandb 종료
     wandb.finish()
