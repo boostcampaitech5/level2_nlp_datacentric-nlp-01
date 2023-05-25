@@ -93,6 +93,41 @@ def calc_f1_score(preds : ArrayLike, labels : ArrayLike) -> float:
         return: float : f1 score
     '''
     return f1_score(labels, preds, average='weighted')
+    
+def calc_confusion_matrix(preds: ArrayLike, labels: ArrayLike) -> None:
+    '''
+        label과 pred의 logits를 받아 confusion matrix를 계산해주는 함수 입니다.
+        classes : '정치', '경제', '사회', '생활문화', '세계', 'IT과학', '스포츠'
+
+        args:
+            preds(ArrayLike) : model's output (예측 데이터)
+            labels(ArrayLike) : target data (정답 데이터)
+        return: None
+    '''
+    # Calculate confusion matrix
+    cm = confusion_matrix(labels, preds)
+    cmn = cm.astype("float") / cm.sum(axis=1)[:, np.newaxis] * 100
+    cmn = cmn.astype("int")
+
+    # set pyplot
+    fig = plt.figure(figsize=(22, 8))
+    ax1 = fig.add_subplot(1, 2, 1)
+    ax2 = fig.add_subplot(1, 2, 2)
+
+    # set non-normalized confusion matrix
+    cm_plot = sns.heatmap(cm, cmap="Blues", fmt="d", annot=True, ax=ax1)
+    cm_plot.set_xlabel("pred")
+    cm_plot.set_ylabel("true")
+    cm_plot.set_title("confusion matrix")
+
+    # set normalized confusion matrix
+    cmn_plot = sns.heatmap(cmn, cmap="Blues", fmt="d", annot=True, ax=ax2)
+    cmn_plot.set_xlabel("pred")
+    cmn_plot.set_ylabel("true")
+    cmn_plot.set_title("confusion matrix normalize")
+    
+    wandb.log({"confusion_matrix": wandb.Image(fig)})
+
 def set_seed(seed:int) -> None:
     '''
         seed값을 고정 시키기 위한 함수 입니다.
