@@ -83,6 +83,16 @@ def calc_accuracy(X,Y):
     return train_acc
     
     
+def calc_f1_score(preds : ArrayLike, labels : ArrayLike) -> float:
+    '''
+        label과 pred의 logits를 받아 f1 score를 계산해주는 함수 입니다.
+
+        args:
+            preds(ArrayLike) : model's output (예측 데이터)
+            labels(ArrayLike) : target data (정답 데이터)
+        return: float : f1 score
+    '''
+    return f1_score(labels, preds, average='weighted')
 
 def main(args):
     '''
