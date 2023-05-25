@@ -244,6 +244,11 @@ def main(args):
         Save output file
     '''
     dataset_eval['target'] = preds
+    
+    # save output file with checking folder
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    dataset_eval.to_csv(os.path.join(OUTPUT_DIR, 'output.csv'), index=False)
+    
 
     # Wandb 설정
     wandb.init(project="DataCentric", name = running_name)
