@@ -93,6 +93,19 @@ def calc_f1_score(preds : ArrayLike, labels : ArrayLike) -> float:
         return: float : f1 score
     '''
     return f1_score(labels, preds, average='weighted')
+def set_seed(seed:int) -> None:
+    '''
+        seed값을 고정 시키기 위한 함수 입니다.
+
+        args : seed(int) : seed 값
+        returns : None
+    '''
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)  # if you are using multi-GPU.
+    np.random.seed(seed)  
+    random.seed(seed)  
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 def main(args):
     '''
@@ -104,6 +117,7 @@ def main(args):
     OUTPUT_DIR = os.path.join(BASE_DIR, '../output')
     SEED = 42
 
+    set_seed(SEED)  # or any other number
 
     ## Setting parameters
     max_len = 64
