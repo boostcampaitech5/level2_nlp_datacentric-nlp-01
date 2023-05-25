@@ -191,6 +191,10 @@ def main(args):
             
             train_acc += calc_accuracy(out, label)
             
+            # logging train information to Wandb
+            if batch_id % 5 == 0:
+                wandb.log({"train_loss" : loss.item(), 'train/epoch': batch_id+1})     # 
+                wandb.log({"train_acc": train_acc / (batch_id+1), 'train/epoch': batch_id+1})      # 
             
             if batch_id % log_interval == 0:
                 print("epoch {} batch id {} loss {} train acc {}".format(e+1, batch_id+1, loss.data.cpu().numpy(), train_acc / (batch_id+1)))
@@ -208,6 +212,12 @@ def main(args):
                 label = label.long().to(DEVICE)
                 out = model(token_ids, valid_length, segment_ids)
                 test_acc += calc_accuracy(out, label)
+
+            print("epoch {} test acc {}".format(e+1, test_acc / (batch_id+1)))
+            
+            # logging eval information to Wandb
+            wandb.log({"eval_f1": calc_f1_score(outs, labels), 'epoch': e+1})     #
+            wandb.log({"eval_acc": test_acc / (batch_id+1), 'epoch': e+1})        # 
         
     '''
         Test
@@ -234,3 +244,10 @@ def main(args):
         Save output file
     '''
     dataset_eval['target'] = preds
+
+    # Wandb 설정
+    wandb.init(project="DataCentric", name = running_name)
+
+
+    # Wandb 종료
+    wandb.finish()
