@@ -11,5 +11,5 @@ scikit-learn
 ipywidgets
 wandb
 seaborn
-black
+black == 23.3.0
 pytz
