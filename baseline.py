@@ -1,32 +1,25 @@
 import os
+import random
 import numpy as np
 import pandas as pd
-import argparse
-import wandb
-import random
 
 import torch
-from torch import nn
-import torch.nn.functional as F
-import torch.optim as optim
-from torch.utils.data import Dataset, DataLoader
-import gluonnlp as nlp
+from torch.utils.data import Dataset
 
-from tqdm import tqdm
+import evaluate
+from transformers import AutoModelForSequenceClassification
+from transformers import DataCollatorWithPadding
+from transformers import TrainingArguments, Trainer
 
-# Kobert
-from kobert import get_tokenizer
-from kobert import get_pytorch_kobert_model
-
-# transformers
-from transformers import AdamW
-from transformers.optimization import get_cosine_schedule_with_warmup
+from tokenization_kobert import KoBertTokenizer
 
 # skleran
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report, accuracy_score, f1_score, precision_score, recall_score
 
 # custom libraries
+import wandb
+import argparse
 from utils import get_timezone
 from sklearn.metrics import confusion_matrix
 import matplotlib.pyplot as plt
@@ -34,7 +27,6 @@ import seaborn as sns
 
 # typing
 from numpy.typing import ArrayLike
-from typing import List
 
 '''
     Define Dataset, Model
@@ -122,7 +114,7 @@ def set_seed(seed:int) -> None:
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
-def main(args):
+def run(args):
     '''
         Set Hyperparameters
     '''
@@ -134,15 +126,6 @@ def main(args):
     SEED = 456
 
     set_seed(SEED)  # or any other number
-
-    ## Setting parameters
-    max_len = 64
-    batch_size = 64
-    warmup_ratio = 0.1
-    num_epochs = 5
-    max_grad_norm = 1
-    log_interval = 200
-    learning_rate =  5e-5
     
     '''
         Load Tokenizer and Model
@@ -237,7 +220,7 @@ if __name__ == "__main__":
     # Wandb 설정
     wandb.init(project="DataCentric", name = running_name)
 
-    main(args)
+    run(args)
 
     # Wandb 종료
     wandb.finish()
