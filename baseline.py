@@ -93,6 +93,19 @@ def calc_confusion_matrix(preds: ArrayLike, labels: ArrayLike) -> None:
     
     wandb.log({"confusion_matrix": wandb.Image(fig)})
 
+'''
+    Define Metric
+'''
+def compute_metrics(eval_pred):
+    f1 = evaluate.load('f1')
+    predictions, labels = eval_pred
+    predictions = np.argmax(predictions, axis=1)
+
+    calc_confusion_matrix(predictions, labels)
+    wandb.log({"eval_accuracy": accuracy_score(predictions, labels)})
+    
+    return f1.compute(predictions=predictions, references=labels, average='macro')
+
 def set_seed(seed:int) -> None:
     '''
         seed값을 고정 시키기 위한 함수 입니다.
