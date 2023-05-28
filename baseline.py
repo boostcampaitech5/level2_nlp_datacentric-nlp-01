@@ -40,69 +40,25 @@ from typing import List
     Define Dataset, Model
 '''
 class BERTDataset(Dataset):
-    def __init__(self, dataset, bert_tokenizer, max_len, pad, pair):
-        transform = nlp.data.BERTSentenceTransform(
-            bert_tokenizer, max_seq_length=max_len, pad=pad, pair=pair)
-        texts = dataset['input_text'].tolist()
-        targets = dataset['target'].tolist()
-
-        self.sentences = [transform(i) for i in texts]
-        self.labels = [np.int32(i) for i in targets]
-
-    def __getitem__(self, i):
-        return (self.sentences[i] + (self.labels[i], ))
-
+    def __init__(self, data, tokenizer):
+        input_texts = data['text']
+        targets = data['target']
+        self.inputs = []; self.labels = []
+        for text, label in zip(input_texts, targets):
+            tokenized_input = tokenizer(text, padding='max_length', truncation=True, return_tensors='pt')
+            self.inputs.append(tokenized_input)
+            self.labels.append(torch.tensor(label))
+    
+    def __getitem__(self, idx):
+        return {
+            'input_ids': self.inputs[idx]['input_ids'].squeeze(0),  
+            'attention_mask': self.inputs[idx]['attention_mask'].squeeze(0),
+            'labels': self.labels[idx].squeeze(0)
+        }
+    
     def __len__(self):
-        return (len(self.labels))
-    
-class BERTClassifier(nn.Module):
-    def __init__(self,
-                 bert,
-                 hidden_size = 768,
-                 num_classes=7,
-                 dr_rate=None,
-                 params=None):
-        super(BERTClassifier, self).__init__()
-        self.bert = bert
-        self.dr_rate = dr_rate
-                 
-        self.classifier = nn.Linear(hidden_size , num_classes)
-        if dr_rate:
-            self.dropout = nn.Dropout(p=dr_rate)
-    
-    def gen_attention_mask(self, token_ids, valid_length):
-        attention_mask = torch.zeros_like(token_ids)
-        for i, v in enumerate(valid_length):
-            attention_mask[i][:v] = 1
-        return attention_mask.float()
+        return len(self.labels)
 
-    def forward(self, token_ids, valid_length, segment_ids):
-        attention_mask = self.gen_attention_mask(token_ids, valid_length)
-        
-        _, pooler = self.bert(input_ids = token_ids, token_type_ids = segment_ids.long(), attention_mask = attention_mask.float().to(token_ids.device))
-        if self.dr_rate:
-            out = self.dropout(pooler)
-        else:
-            out = pooler
-        return self.classifier(out)
-    
-def calc_accuracy(X,Y):
-    _, max_indices = torch.max(X, 1)
-    train_acc = (max_indices == Y).sum().data.cpu().numpy()/max_indices.size()[0]       # accuracy
-    return train_acc
-    
-    
-def calc_f1_score(preds : ArrayLike, labels : ArrayLike) -> float:
-    '''
-        label과 pred의 logits를 받아 f1 score를 계산해주는 함수 입니다.
-
-        args:
-            preds(ArrayLike) : model's output (예측 데이터)
-            labels(ArrayLike) : target data (정답 데이터)
-        return: float : f1 score
-    '''
-    return f1_score(labels, preds, average='weighted')
-    
 def calc_confusion_matrix(preds: ArrayLike, labels: ArrayLike) -> None:
     '''
         label과 pred의 logits를 받아 confusion matrix를 계산해주는 함수 입니다.
@@ -156,10 +112,11 @@ def main(args):
         Set Hyperparameters
     '''
     DEVICE = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    
     BASE_DIR = os.getcwd()
     DATA_DIR = os.path.join(BASE_DIR, '../data')
     OUTPUT_DIR = os.path.join(BASE_DIR, '../output')
-    SEED = 42
+    SEED = 456
 
     set_seed(SEED)  # or any other number
 
@@ -175,125 +132,75 @@ def main(args):
     '''
         Load Tokenizer and Model
     '''
-    bertmodel, vocab = get_pytorch_kobert_model(cachedir=".cache")
-    tokenizer = get_tokenizer()
-    tok = nlp.data.BERTSPTokenizer(tokenizer, vocab, lower=False)
+    model_name = 'monologg/kobert'
+    tokenizer = KoBertTokenizer.from_pretrained(model_name)
+    model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=7).to(DEVICE)
     
     '''
         Define Dataset
     '''
     data = pd.read_csv(os.path.join(DATA_DIR, args.file))
-    dataset_train, dataset_eval = train_test_split(data, train_size=0.7, random_state=SEED)
+    dataset_train, dataset_valid = train_test_split(data, test_size=0.3, random_state=SEED)
     
-    data_train = BERTDataset(dataset_train, tok, max_len, True, False)
-    data_eval = BERTDataset(dataset_eval, tok, max_len, True, False)
+    data_train = BERTDataset(dataset_train, tokenizer)
+    data_valid = BERTDataset(dataset_valid, tokenizer)
     
-    train_dataloader = DataLoader(data_train, batch_size=batch_size)
-    eval_dataloader = DataLoader(data_eval, batch_size=batch_size)
-    
-    model = BERTClassifier(bertmodel, dr_rate=0.5).to(DEVICE)
-    
-    '''
-        Define Optimizer and Scheduler
-    '''
-    # Prepare optimizer and schedule (linear warmup and decay)
-    no_decay = ['bias', 'LayerNorm.weight']
-    optimizer_grouped_parameters = [
-        {'params': [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)], 'weight_decay': 0.01},
-        {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
-    ]
-    
-    optimizer = AdamW(optimizer_grouped_parameters, lr=learning_rate)
-    loss_fn = nn.CrossEntropyLoss()
-    
-    t_total = len(train_dataloader) * num_epochs
-    warmup_step = int(t_total * warmup_ratio)
-    scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=warmup_step, num_training_steps=t_total)
+    data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
     
     '''
         Train
     '''
-    for e in range(num_epochs):
-        train_acc = 0.0
-        test_acc = 0.0
-        
-        model.train()
-        for batch_id, (token_ids, valid_length, segment_ids, label) in tqdm(enumerate(train_dataloader), total=len(train_dataloader)):
-            optimizer.zero_grad()
-            token_ids = token_ids.long().to(DEVICE)
-            segment_ids = segment_ids.long().to(DEVICE)
-            valid_length= valid_length
-            label = label.long().to(DEVICE)
-            
-            out = model(token_ids, valid_length, segment_ids)
-            loss = loss_fn(out, label)
-            
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
-            optimizer.step()
-            scheduler.step()  # Update learning rate schedule
-            
-            train_acc += calc_accuracy(out, label)
-            
-            # logging train information to Wandb
-            if batch_id % 5 == 0:
-                wandb.log({"train_loss" : loss.item(), 'train/epoch': batch_id+1})     # 
-                wandb.log({"train_acc": train_acc / (batch_id+1), 'train/epoch': batch_id+1})      # 
-            
-            if batch_id % log_interval == 0:
-                print("epoch {} batch id {} loss {} train acc {}".format(e+1, batch_id+1, loss.data.cpu().numpy(), train_acc / (batch_id+1)))
-                
-        print("epoch {} train acc {}".format(e+1, train_acc / (batch_id+1)))
-        
-        model.eval()
-        outs : List = []
-        labels : List = []
-
-        # Evalutation
-        with torch.no_grad():
-            for batch_id, (token_ids, valid_length, segment_ids, label) in tqdm(enumerate(eval_dataloader), total=len(eval_dataloader)):
-                token_ids = token_ids.long().to(DEVICE)
-                segment_ids = segment_ids.long().to(DEVICE)
-                valid_length= valid_length
-                label = label.long().to(DEVICE)
-                out = model(token_ids, valid_length, segment_ids)
-                test_acc += calc_accuracy(out, label)
-                
-                ### convert prob to logits for confusion matrix
-                _, max_indices = torch.max(out, 1)
-                outs.extend(max_indices.detach().cpu().numpy())
-                labels.extend(label.detach().cpu().numpy())
-
-            outs = np.array(outs)
-            labels = np.array(labels)
-            calc_confusion_matrix(outs, labels)
-
-            print("epoch {} test acc {}".format(e+1, test_acc / (batch_id+1)))
-            
-            # logging eval information to Wandb
-            wandb.log({"eval_f1": calc_f1_score(outs, labels), 'epoch': e+1})     #
-            wandb.log({"eval_acc": test_acc / (batch_id+1), 'epoch': e+1})        # 
+    training_args = TrainingArguments(
+        output_dir=OUTPUT_DIR,
+        overwrite_output_dir=True,
+        do_train=True,
+        do_eval=True,
+        do_predict=True,
+        logging_strategy='steps',
+        evaluation_strategy='steps',
+        save_strategy='steps',
+        logging_steps=100,
+        eval_steps=100,
+        save_steps=100,
+        save_total_limit=2,
+        learning_rate= 2e-05,
+        adam_beta1 = 0.9,
+        adam_beta2 = 0.999,
+        adam_epsilon=1e-08,
+        weight_decay=0.01,
+        lr_scheduler_type='linear',
+        per_device_train_batch_size=32,
+        per_device_eval_batch_size=32,
+        num_train_epochs=2,
+        load_best_model_at_end=True,
+        metric_for_best_model='eval_f1',
+        greater_is_better=True,
+        seed=SEED
+    )
+    
+    trainer = Trainer(
+        model=model,
+        args=training_args,
+        train_dataset=data_train,
+        eval_dataset=data_valid,
+        data_collator=data_collator,
+        compute_metrics=compute_metrics,
+    )
+    
+    trainer.train()
         
     '''
-        Test
+        Evaluate Model
     '''
     dataset_eval = pd.read_csv(os.path.join(DATA_DIR, 'test.csv'))
-    dataset_eval['target'] = [0]*len(dataset_eval)
-    data_eval = BERTDataset(dataset_eval, tok, max_len, True, False)
-    eval_dataloader = DataLoader(data_eval, batch_size=batch_size, shuffle=False)
-    
-    preds = []
     model.eval()
-    for batch_id, (token_ids, valid_length, segment_ids, _) in tqdm(enumerate(eval_dataloader), total=len(eval_dataloader)):
-        token_ids = token_ids.long().to(DEVICE)
-        segment_ids = segment_ids.long().to(DEVICE)
-        valid_length= valid_length
-        out = model(token_ids, valid_length, segment_ids)
-        _, max_indices = torch.max(out, 1)
-        preds.extend(list(max_indices))
-
-    print("epoch {} test acc {}".format(e+1, test_acc / (batch_id+1)))
-    preds = [int(p) for p in preds]
+    preds = []
+    for idx, sample in dataset_eval.iterrows():
+        inputs = tokenizer(sample['text'], return_tensors="pt").to(DEVICE)
+        with torch.no_grad():
+            logits = model(**inputs).logits
+            pred = torch.argmax(torch.nn.Softmax(dim=1)(logits), dim=1).cpu().numpy()
+            preds.extend(pred)
     
     '''
         Save output file
