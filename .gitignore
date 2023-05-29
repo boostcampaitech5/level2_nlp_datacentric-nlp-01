@@ -1,4 +1,6 @@
 /code
 /.ipynb_checkpoints
+/wandb
+/__pycache__
 
 *.csv
