@@ -214,6 +214,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-f", "--file", type=str, default="train.csv")
     args = parser.parse_args()
+
+    print(f"{args.file} 에 대한 학습을 진행합니다.\n\n")
     
     running_name = f"{args.file[:-4]}-{get_timezone()}"
 
