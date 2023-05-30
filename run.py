@@ -207,7 +207,7 @@ def run(args):
     
     # save output file with checking folder
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    dataset_eval.to_csv(os.path.join(OUTPUT_DIR, 'output.csv'), index=False)
+    dataset_eval.to_csv(os.path.join(OUTPUT_DIR, f'{args.file[:-4]}-output.csv'), index=False)
     
 if __name__ == "__main__":
     # arguments로 train_data의 파일을 입력했으면 해당 파일을 사용하도록 설정하고 아니면 train.csv를 사용하도록 설정
