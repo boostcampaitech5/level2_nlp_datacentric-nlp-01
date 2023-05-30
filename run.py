@@ -37,7 +37,12 @@ class BERTDataset(Dataset):
         targets = data['target']
         self.inputs = []; self.labels = []
         for text, label in zip(input_texts, targets):
-            tokenized_input = tokenizer(text, padding='max_length', truncation=True, return_tensors='pt')
+            tokenized_input = tokenizer(
+                text, 
+                padding='max_length', 
+                max_length=50,
+                truncation=True, 
+                return_tensors='pt')
             self.inputs.append(tokenized_input)
             self.labels.append(torch.tensor(label))
     
@@ -54,7 +59,7 @@ class BERTDataset(Dataset):
 def calc_confusion_matrix(preds: ArrayLike, labels: ArrayLike) -> None:
     '''
         label과 pred의 logits를 받아 confusion matrix를 계산해주는 함수 입니다.
-        classes : '정치', '경제', '사회', '생활문화', '세계', 'IT과학', '스포츠'
+        classes : 0 = IT과학,  1= 경제, 2 = 사회, 3 = 생활문화, 4=세계, 5 =스포츠, 6=정치
 
         args:
             preds(ArrayLike) : model's output (예측 데이터)
@@ -207,13 +212,15 @@ def run(args):
     
     # save output file with checking folder
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    dataset_eval.to_csv(os.path.join(OUTPUT_DIR, 'output.csv'), index=False)
+    dataset_eval.to_csv(os.path.join(OUTPUT_DIR, f'{args.file[:-4]}-output.csv'), index=False)
     
 if __name__ == "__main__":
     # arguments로 train_data의 파일을 입력했으면 해당 파일을 사용하도록 설정하고 아니면 train.csv를 사용하도록 설정
     parser = argparse.ArgumentParser()
     parser.add_argument("-f", "--file", type=str, default="train.csv")
     args = parser.parse_args()
+
+    print(f"{args.file} 에 대한 학습을 진행합니다.\n\n")
     
     running_name = f"{args.file[:-4]}-{get_timezone()}"
 
