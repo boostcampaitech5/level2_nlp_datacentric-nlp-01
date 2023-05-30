@@ -54,7 +54,7 @@ class BERTDataset(Dataset):
 def calc_confusion_matrix(preds: ArrayLike, labels: ArrayLike) -> None:
     '''
         label과 pred의 logits를 받아 confusion matrix를 계산해주는 함수 입니다.
-        classes : '정치', '경제', '사회', '생활문화', '세계', 'IT과학', '스포츠'
+        classes : 0 = IT과학,  1= 경제, 2 = 사회, 3 = 생활문화, 4=세계, 5 =스포츠, 6=정치
 
         args:
             preds(ArrayLike) : model's output (예측 데이터)
