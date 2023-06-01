@@ -7,6 +7,13 @@ warnings.filterwarnings('ignore')
 
 
 def under_sampling(args):
+    '''
+    가장 작은 label의 개수에 맞춰 전체 label 수 under sampling
+    Ex)
+    기존 : {6: 7988, 5: 7653, 4: 8030, 3: 6035, 2: 2099, 1: 6021, 0: 7852}
+    under sampling 후 : {6: 2099, 5: 2099, 4: 2099, 3: 2099, 2: 2099, 1: 2099, 0: 2099}
+    '''
+
     BASE_DIR = os.getcwd()
     DATA_DIR = os.path.join(BASE_DIR, '../data')
     df = pd.read_csv(os.path.join(DATA_DIR, args.file)) 
@@ -36,6 +43,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-f", "--file", type=str, default="train.csv")
     args = parser.parse_args()
-    
+
     under_train = under_sampling(args)
 
